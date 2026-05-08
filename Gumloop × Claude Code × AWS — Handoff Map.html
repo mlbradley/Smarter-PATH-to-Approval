@@ -1,0 +1,571 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Gumloop × Claude Code × AWS — Handoff Architecture</title>
+<style>
+  :root {
+    --bg: #060a14;
+    --surface: #0d1420;
+    --surface2: #131d2e;
+    --border: #1a2d45;
+    --text: #e2e8f0;
+    --muted: #64748b;
+    --gumloop: #3b82f6;
+    --claude: #f97316;
+    --aws: #f59e0b;
+    --green: #10b981;
+    --red: #ef4444;
+    --purple: #8b5cf6;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: 'Segoe UI', system-ui, sans-serif; font-size: 13px; padding: 32px; }
+
+  h1 { font-size: 22px; font-weight: 800; letter-spacing: -0.5px; margin-bottom: 4px; }
+  .subtitle { color: var(--muted); font-size: 13px; margin-bottom: 36px; }
+
+  /* LEGEND */
+  .legend { display: flex; gap: 20px; margin-bottom: 36px; flex-wrap: wrap; }
+  .legend-item { display: flex; align-items: center; gap: 8px; font-size: 12px; }
+  .legend-dot { width: 12px; height: 12px; border-radius: 50%; }
+
+  /* MAIN LAYOUT */
+  .arch { display: grid; grid-template-columns: 1fr 60px 1fr 60px 1fr; gap: 0; align-items: start; margin-bottom: 48px; }
+
+  /* SYSTEM COLUMNS */
+  .system { background: var(--surface); border-radius: 16px; overflow: hidden; }
+  .sys-header { padding: 16px 20px; display: flex; align-items: center; gap: 12px; }
+  .sys-icon { width: 36px; height: 36px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 18px; flex-shrink: 0; }
+  .sys-name { font-size: 15px; font-weight: 800; }
+  .sys-role { font-size: 11px; margin-top: 2px; }
+  .sys-body { padding: 16px; }
+
+  /* SERVICE BLOCKS */
+  .service { background: var(--surface2); border-radius: 10px; border: 1px solid var(--border); padding: 12px 14px; margin-bottom: 8px; }
+  .service:last-child { margin-bottom: 0; }
+  .service-name { font-size: 12px; font-weight: 700; margin-bottom: 4px; display: flex; align-items: center; gap: 6px; }
+  .service-desc { font-size: 11px; color: var(--muted); line-height: 1.5; }
+  .service-tag { font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 10px; }
+
+  /* ARROWS */
+  .arrow-col { display: flex; flex-direction: column; align-items: center; justify-content: flex-start; padding-top: 80px; gap: 6px; }
+  .arrow-line { flex: 1; width: 2px; background: var(--border); min-height: 20px; }
+  .arrow-head { width: 0; height: 0; border-left: 6px solid transparent; border-right: 6px solid transparent; }
+  .arrow-down { border-top: 8px solid var(--border); }
+  .arrow-label { font-size: 10px; color: var(--muted); text-align: center; writing-mode: vertical-rl; transform: rotate(180deg); }
+
+  /* HANDOFF CARDS */
+  .handoffs { margin-bottom: 48px; }
+  .section-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 1.2px; color: var(--muted); margin-bottom: 16px; display: flex; align-items: center; gap: 12px; }
+  .section-label::after { content:''; flex:1; height:1px; background:var(--border); }
+
+  .handoff-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; }
+
+  .handoff-card { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; overflow: hidden; }
+  .handoff-header { padding: 14px 18px 10px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--border); }
+  .handoff-from-to { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 700; }
+  .system-badge { padding: 3px 10px; border-radius: 20px; font-size: 11px; font-weight: 800; }
+  .badge-gumloop { background: rgba(59,130,246,0.15); color: #60a5fa; }
+  .badge-claude  { background: rgba(249,115,22,0.15); color: #fb923c; }
+  .badge-aws     { background: rgba(245,158,11,0.15); color: #fbbf24; }
+  .badge-auto    { background: rgba(16,185,129,0.15); color: #34d399; }
+  .badge-manual  { background: rgba(239,68,68,0.15); color: #f87171; }
+  .badge-semi    { background: rgba(139,92,246,0.15); color: #a78bfa; }
+  .arrow-badge   { font-size: 16px; }
+  .handoff-body  { padding: 14px 18px; }
+
+  .handoff-row { margin-bottom: 12px; }
+  .handoff-row:last-child { margin-bottom: 0; }
+  .handoff-field { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: var(--muted); margin-bottom: 4px; }
+  .handoff-val { font-size: 12px; line-height: 1.5; color: var(--text); }
+  .handoff-val code { background: var(--surface2); border: 1px solid var(--border); border-radius: 4px; padding: 1px 6px; font-size: 11px; font-family: 'Courier New', monospace; color: #7dd3fc; }
+
+  /* ARTIFACT CHIPS */
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+  .chip { background: var(--surface2); border: 1px solid var(--border); border-radius: 6px; padding: 3px 9px; font-size: 11px; font-family: 'Courier New', monospace; color: #86efac; }
+  .chip.orange { color: #fdba74; }
+  .chip.blue   { color: #93c5fd; }
+  .chip.yellow { color: #fde68a; }
+  .chip.red    { color: #fca5a5; }
+  .chip.purple { color: #c4b5fd; }
+
+  /* FLOW DIAGRAM */
+  .flow { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 28px; margin-bottom: 48px; overflow-x: auto; }
+  .flow-row { display: flex; align-items: center; gap: 0; margin-bottom: 0; }
+  .flow-node { background: var(--surface2); border: 1px solid var(--border); border-radius: 10px; padding: 10px 14px; text-align: center; min-width: 120px; flex-shrink: 0; }
+  .flow-node-label { font-size: 11px; font-weight: 700; margin-bottom: 2px; }
+  .flow-node-sub { font-size: 10px; color: var(--muted); }
+  .flow-arrow { display: flex; flex-direction: column; align-items: center; padding: 0 4px; flex-shrink: 0; }
+  .flow-arrow-line { height: 2px; width: 40px; }
+  .flow-arrow-label { font-size: 9px; color: var(--muted); text-align: center; white-space: nowrap; margin-top: 3px; }
+  .flow-arrow-tip { font-size: 10px; margin-top: -3px; }
+
+  /* STATE TABLE */
+  .state-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 48px; }
+  .state-card { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; overflow: hidden; }
+  .state-header { padding: 12px 18px; border-bottom: 1px solid var(--border); font-size: 13px; font-weight: 700; display: flex; align-items: center; gap: 8px; }
+  .state-body { padding: 14px 18px; }
+  .state-row { display: flex; justify-content: space-between; align-items: flex-start; padding: 8px 0; border-bottom: 1px solid rgba(26,45,69,0.5); font-size: 12px; gap: 12px; }
+  .state-row:last-child { border-bottom: none; }
+  .state-step { color: var(--muted); min-width: 120px; }
+  .state-who  { font-weight: 700; text-align: right; }
+
+  /* DETAIL TABLE */
+  .detail-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  .detail-table th { text-align: left; padding: 8px 12px; color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 1px solid var(--border); }
+  .detail-table td { padding: 9px 12px; border-bottom: 1px solid rgba(26,45,69,0.5); vertical-align: top; }
+  .detail-table tr:last-child td { border-bottom: none; }
+  .detail-table tr:hover td { background: var(--surface2); }
+
+  /* FRICTION POINTS */
+  .friction { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; margin-bottom: 48px; }
+  .friction-card { background: var(--surface); border-radius: 12px; padding: 16px; border-left: 3px solid; }
+  .friction-card.now   { border-left-color: var(--red); }
+  .friction-card.soon  { border-left-color: var(--aws); }
+  .friction-card.later { border-left-color: var(--green); }
+  .friction-title { font-size: 12px; font-weight: 700; margin-bottom: 8px; }
+  .friction-body { font-size: 11px; color: var(--muted); line-height: 1.7; }
+</style>
+</head>
+<body>
+
+<h1>Gumloop × Claude Code × AWS — Exact Handoff Map</h1>
+<div class="subtitle">Architecture · Artifacts · Triggers · Protocols · Current vs. Future State</div>
+
+<div class="legend">
+  <div class="legend-item"><div class="legend-dot" style="background:#3b82f6;"></div> Gumloop — Orchestration & UI</div>
+  <div class="legend-item"><div class="legend-dot" style="background:#f97316;"></div> Claude Code — Code Generation & Maintenance</div>
+  <div class="legend-item"><div class="legend-dot" style="background:#f59e0b;"></div> AWS — Runtime Infrastructure</div>
+  <div class="legend-item"><div class="legend-dot" style="background:#10b981;"></div> Automated handoff</div>
+  <div class="legend-item"><div class="legend-dot" style="background:#ef4444;"></div> Manual handoff (today)</div>
+  <div class="legend-item"><div class="legend-dot" style="background:#8b5cf6;"></div> Semi-automated</div>
+</div>
+
+<!-- ── SYSTEM OVERVIEW ─────────────────────────────── -->
+<div class="section-label">System Overview</div>
+<div class="arch">
+
+  <!-- GUMLOOP -->
+  <div class="system" style="border-top: 3px solid var(--gumloop);">
+    <div class="sys-header" style="background: rgba(59,130,246,0.05);">
+      <div class="sys-icon" style="background: rgba(59,130,246,0.15);">🔵</div>
+      <div>
+        <div class="sys-name" style="color: #60a5fa;">Gumloop</div>
+        <div class="sys-role" style="color: var(--muted);">Orchestration · Triggers · UI · Integrations</div>
+      </div>
+    </div>
+    <div class="sys-body">
+      <div class="service">
+        <div class="service-name">⚡ Trigger Engine
+          <span class="service-tag" style="background:rgba(59,130,246,0.15);color:#60a5fa;">WATCH</span>
+        </div>
+        <div class="service-desc">Polls ClinicalTrials.gov, SEC EDGAR, PR Newswire. Fires on new 8-K filings, trial status changes, conference abstract drops.</div>
+      </div>
+      <div class="service">
+        <div class="service-name">🔌 Integration Layer</div>
+        <div class="service-desc">Google Drive, Slack, email. Calls AWS API endpoints. Routes structured data to S3 landing zone.</div>
+      </div>
+      <div class="service">
+        <div class="service-name">📊 Dashboard Renderer</div>
+        <div class="service-desc">Serves the Competitive Pipeline Analyzer UI. Pulls live data from the AWS FastAPI layer. Handles dark/light mode, config controls.</div>
+      </div>
+      <div class="service">
+        <div class="service-name">📋 Spec Manager</div>
+        <div class="service-desc">Holds the tool specifications. Packages context + task for Claude Code. Receives updated code back.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ARROW 1 -->
+  <div class="arrow-col">
+    <div style="font-size:11px;color:#ef4444;font-weight:700;text-align:center;margin-bottom:6px;">Manual<br>today</div>
+    <div style="font-size:22px;color:var(--border);">⇄</div>
+    <div style="font-size:11px;color:#10b981;font-weight:700;text-align:center;margin-top:6px;">API<br>future</div>
+  </div>
+
+  <!-- CLAUDE CODE -->
+  <div class="system" style="border-top: 3px solid var(--claude);">
+    <div class="sys-header" style="background: rgba(249,115,22,0.05);">
+      <div class="sys-icon" style="background: rgba(249,115,22,0.15);">🟠</div>
+      <div>
+        <div class="sys-name" style="color: #fb923c;">Claude Code</div>
+        <div class="sys-role" style="color: var(--muted);">Code Generation · Debugging · Deployment Prep</div>
+      </div>
+    </div>
+    <div class="sys-body">
+      <div class="service">
+        <div class="service-name">🧠 Backend Generator
+          <span class="service-tag" style="background:rgba(249,115,22,0.15);color:#fb923c;">WRITE</span>
+        </div>
+        <div class="service-desc">Writes FastAPI server, Neo4j Cypher queries, Airflow DAGs, XGBoost model training scripts. Outputs production-ready Python.</div>
+      </div>
+      <div class="service">
+        <div class="service-name">🔬 NLP Prompt Engineer</div>
+        <div class="service-desc">Builds and refines the LLM extraction prompts (failure post-mortem, spin detection). Tests against sample press releases. Outputs versioned prompt templates.</div>
+      </div>
+      <div class="service">
+        <div class="service-name">🧪 Test Writer</div>
+        <div class="service-desc">Generates pytest suites for every endpoint. Validates PTRS calculator against historical data. Writes mock data fixtures.</div>
+      </div>
+      <div class="service">
+        <div class="service-name">📦 Deployment Packager</div>
+        <div class="service-desc">Writes Dockerfile, buildspec.yml, requirements.txt. Commits to GitHub. Triggers CI/CD pipeline downstream.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ARROW 2 -->
+  <div class="arrow-col">
+    <div style="font-size:11px;color:#8b5cf6;font-weight:700;text-align:center;margin-bottom:6px;">GitHub<br>Actions</div>
+    <div style="font-size:22px;color:var(--border);">⇒</div>
+    <div style="font-size:11px;color:#10b981;font-weight:700;text-align:center;margin-top:6px;">Auto<br>CI/CD</div>
+  </div>
+
+  <!-- AWS -->
+  <div class="system" style="border-top: 3px solid var(--aws);">
+    <div class="sys-header" style="background: rgba(245,158,11,0.05);">
+      <div class="sys-icon" style="background: rgba(245,158,11,0.15);">🟡</div>
+      <div>
+        <div class="sys-name" style="color: #fbbf24;">AWS</div>
+        <div class="sys-role" style="color: var(--muted);">Runtime · Storage · ML · APIs</div>
+      </div>
+    </div>
+    <div class="sys-body">
+      <div class="service">
+        <div class="service-name">🗄️ Neo4j on EC2
+          <span class="service-tag" style="background:rgba(245,158,11,0.15);color:#fbbf24;">GRAPH</span>
+        </div>
+        <div class="service-desc">Knowledge graph: Companies, Assets, Targets, Trials, Outcomes. Receives structured data from Gumloop. Queried by FastAPI layer.</div>
+      </div>
+      <div class="service">
+        <div class="service-name">🚀 FastAPI on Lambda/ECS</div>
+        <div class="service-desc">REST API serving the Competitive Pipeline Analyzer. Endpoints: /predictive_landscape, /failure_risk, /velocity_model, /ae_matrix.</div>
+      </div>
+      <div class="service">
+        <div class="service-name">🤖 SageMaker Endpoints</div>
+        <div class="service-desc">Hosts XGBoost velocity model + logistic PTRS model. Called by FastAPI. Returns predicted completion dates and success probabilities.</div>
+      </div>
+      <div class="service">
+        <div class="service-name">🪣 S3 + Airflow (MWAA)</div>
+        <div class="service-desc">S3 landing zone for raw registry data. Airflow orchestrates daily ETL: clean → transform → load to Neo4j. Triggers on new S3 objects.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── EXACT HANDOFF CARDS ─────────────────────────────── -->
+<div class="section-label">Exact Handoff Points</div>
+<div class="handoff-grid" style="margin-bottom:48px;">
+
+  <!-- HANDOFF 1: Gumloop → Claude Code -->
+  <div class="handoff-card">
+    <div class="handoff-header">
+      <div class="handoff-from-to">
+        <span class="system-badge badge-gumloop">Gumloop</span>
+        <span style="color:var(--muted);">→</span>
+        <span class="system-badge badge-claude">Claude Code</span>
+      </div>
+      <span class="system-badge badge-manual">Manual today</span>
+    </div>
+    <div class="handoff-body">
+      <div class="handoff-row">
+        <div class="handoff-field">Trigger</div>
+        <div class="handoff-val">New spec uploaded to Gumloop · User requests new tool or feature · Spec update from Gemini</div>
+      </div>
+      <div class="handoff-row">
+        <div class="handoff-field">What Gumloop packages</div>
+        <div class="chips">
+          <span class="chip blue">spec.md</span>
+          <span class="chip blue">data_schema.json</span>
+          <span class="chip blue">existing_code/ (if update)</span>
+          <span class="chip blue">sample_payloads.json</span>
+          <span class="chip blue">test_cases.txt</span>
+        </div>
+      </div>
+      <div class="handoff-row">
+        <div class="handoff-field">Prompt structure sent to Claude Code</div>
+        <div class="handoff-val">
+          <code>ROLE:</code> Senior Python/ML engineer<br>
+          <code>CONTEXT:</code> spec + schema + existing code<br>
+          <code>TASK:</code> Build/update [specific layer]<br>
+          <code>CONSTRAINTS:</code> AWS-compatible, boto3, FastAPI<br>
+          <code>OUTPUT:</code> Committed to GitHub repo
+        </div>
+      </div>
+      <div class="handoff-row">
+        <div class="handoff-field">Format</div>
+        <div class="handoff-val">Today: paste in Claude Code terminal<br>Future: <code>POST /claude-code/task</code> via API</div>
+      </div>
+      <div class="handoff-row">
+        <div class="handoff-field">Human in the loop?</div>
+        <div class="handoff-val" style="color:#f87171;">✋ Yes today — you review + trigger manually</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- HANDOFF 2: Claude Code → AWS -->
+  <div class="handoff-card">
+    <div class="handoff-header">
+      <div class="handoff-from-to">
+        <span class="system-badge badge-claude">Claude Code</span>
+        <span style="color:var(--muted);">→</span>
+        <span class="system-badge badge-aws">AWS</span>
+      </div>
+      <span class="system-badge badge-auto">Automated</span>
+    </div>
+    <div class="handoff-body">
+      <div class="handoff-row">
+        <div class="handoff-field">Trigger</div>
+        <div class="handoff-val">Claude Code commits to <code>main</code> branch on GitHub → GitHub Actions fires</div>
+      </div>
+      <div class="handoff-row">
+        <div class="handoff-field">Artifacts committed</div>
+        <div class="chips">
+          <span class="chip orange">app/main.py</span>
+          <span class="chip orange">models/ptrs.py</span>
+          <span class="chip orange">models/velocity.py</span>
+          <span class="chip orange">graph/neo4j_client.py</span>
+          <span class="chip orange">etl/airflow_dag.py</span>
+          <span class="chip orange">Dockerfile</span>
+          <span class="chip orange">requirements.txt</span>
+          <span class="chip orange">buildspec.yml</span>
+          <span class="chip orange">tests/</span>
+        </div>
+      </div>
+      <div class="handoff-row">
+        <div class="handoff-field">CI/CD pipeline (GitHub Actions)</div>
+        <div class="handoff-val">
+          1. <code>pytest</code> — run test suite<br>
+          2. <code>docker build</code> → push to ECR<br>
+          3. <code>sagemaker.create_model()</code> — update ML endpoints<br>
+          4. <code>ecs update-service</code> or <code>lambda update</code><br>
+          5. <code>airflow dags trigger</code> — refresh ETL
+        </div>
+      </div>
+      <div class="handoff-row">
+        <div class="handoff-field">Rollback condition</div>
+        <div class="handoff-val">If <code>pytest</code> fails → pipeline halts, no deploy. Slack alert fires to Gumloop trigger.</div>
+      </div>
+      <div class="handoff-row">
+        <div class="handoff-field">Human in the loop?</div>
+        <div class="handoff-val" style="color:#34d399;">✅ No — fully automated once committed</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- HANDOFF 3: AWS → Gumloop -->
+  <div class="handoff-card">
+    <div class="handoff-header">
+      <div class="handoff-from-to">
+        <span class="system-badge badge-aws">AWS</span>
+        <span style="color:var(--muted);">→</span>
+        <span class="system-badge badge-gumloop">Gumloop</span>
+      </div>
+      <span class="system-badge badge-auto">Automated</span>
+    </div>
+    <div class="handoff-body">
+      <div class="handoff-row">
+        <div class="handoff-field">Trigger</div>
+        <div class="handoff-val">Gumloop polls <code>/api/v1/pipeline/predictive_landscape</code> on schedule · SNS push on new data · CloudWatch alarm on model drift</div>
+      </div>
+      <div class="handoff-row">
+        <div class="handoff-field">What AWS returns</div>
+        <div class="chips">
+          <span class="chip yellow">predictive_landscape.json</span>
+          <span class="chip yellow">ptrs_scores.json</span>
+          <span class="chip yellow">velocity_projections.json</span>
+          <span class="chip yellow">failure_vectors.json</span>
+          <span class="chip yellow">ae_matrix.json</span>
+        </div>
+      </div>
+      <div class="handoff-row">
+        <div class="handoff-field">Key API endpoints</div>
+        <div class="handoff-val">
+          <code>GET /api/v1/pipeline/predictive_landscape?indication=NSCLC&target_date=2028-Q2</code><br><br>
+          <code>GET /api/v1/assets/{id}/failure_risk</code><br><br>
+          <code>GET /api/v1/temporal/velocity_model</code><br><br>
+          <code>POST /api/v1/nlp/extract_failure</code> ← body: raw press release text
+        </div>
+      </div>
+      <div class="handoff-row">
+        <div class="handoff-field">Gumloop action on receipt</div>
+        <div class="handoff-val">Updates dashboard · Fires alert if PTRS drops >10% · Shares report via Drive · Logs to history</div>
+      </div>
+      <div class="handoff-row">
+        <div class="handoff-field">Human in the loop?</div>
+        <div class="handoff-val" style="color:#34d399;">✅ No — data flows automatically</div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- ── DATA FLOW ─────────────────────────────── -->
+<div class="section-label">End-to-End Data Flow — New Trial Alert</div>
+<div class="flow" style="margin-bottom:48px;">
+  <div style="font-size:12px;color:var(--muted);margin-bottom:20px;">Example: New Phase 3 NSCLC trial posted to ClinicalTrials.gov at 2am</div>
+  <div style="display:flex;align-items:center;flex-wrap:wrap;gap:0;">
+
+    <div class="flow-node" style="border-color:#3b82f6;">
+      <div class="flow-node-label" style="color:#60a5fa;">Gumloop</div>
+      <div class="flow-node-sub">Detects new NCT ID<br>via CT.gov poll</div>
+    </div>
+    <div class="flow-arrow">
+      <div class="flow-arrow-line" style="background:#3b82f6;"></div>
+      <div class="flow-arrow-tip">▶</div>
+      <div class="flow-arrow-label">POST raw JSON<br>to S3 landing</div>
+    </div>
+
+    <div class="flow-node" style="border-color:#f59e0b;">
+      <div class="flow-node-label" style="color:#fbbf24;">S3 Landing</div>
+      <div class="flow-node-sub">raw_trials/<br>2025-05-08.json</div>
+    </div>
+    <div class="flow-arrow">
+      <div class="flow-arrow-line" style="background:#f59e0b;"></div>
+      <div class="flow-arrow-tip">▶</div>
+      <div class="flow-arrow-label">S3 event triggers<br>Airflow DAG</div>
+    </div>
+
+    <div class="flow-node" style="border-color:#f59e0b;">
+      <div class="flow-node-label" style="color:#fbbf24;">Airflow ETL</div>
+      <div class="flow-node-sub">Clean · Enrich<br>Ontology map</div>
+    </div>
+    <div class="flow-arrow">
+      <div class="flow-arrow-line" style="background:#f59e0b;"></div>
+      <div class="flow-arrow-tip">▶</div>
+      <div class="flow-arrow-label">Cypher MERGE<br>into Neo4j</div>
+    </div>
+
+    <div class="flow-node" style="border-color:#f59e0b;">
+      <div class="flow-node-label" style="color:#fbbf24;">Neo4j Graph</div>
+      <div class="flow-node-sub">New (Asset) node<br>+ edges created</div>
+    </div>
+    <div class="flow-arrow">
+      <div class="flow-arrow-line" style="background:#f59e0b;"></div>
+      <div class="flow-arrow-tip">▶</div>
+      <div class="flow-arrow-label">FastAPI queries<br>graph + SageMaker</div>
+    </div>
+
+    <div class="flow-node" style="border-color:#f59e0b;">
+      <div class="flow-node-label" style="color:#fbbf24;">FastAPI + SageMaker</div>
+      <div class="flow-node-sub">PTRS calculated<br>Timeline projected</div>
+    </div>
+    <div class="flow-arrow">
+      <div class="flow-arrow-line" style="background:#f59e0b;"></div>
+      <div class="flow-arrow-tip">▶</div>
+      <div class="flow-arrow-label">SNS push to<br>Gumloop webhook</div>
+    </div>
+
+    <div class="flow-node" style="border-color:#3b82f6;">
+      <div class="flow-node-label" style="color:#60a5fa;">Gumloop</div>
+      <div class="flow-node-sub">Updates dashboard<br>Sends alert</div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ── FRICTION MAP ─────────────────────────────── -->
+<div class="section-label">Friction Points & Resolution Path</div>
+<div class="friction">
+  <div class="friction-card now">
+    <div class="friction-title" style="color:#f87171;">🔴 Now — Manual seam</div>
+    <div class="friction-body">
+      The Gumloop → Claude Code handoff is manual. You paste the spec + context into Claude Code's terminal yourself.<br><br>
+      <strong>Mitigation:</strong> Standardise a context template (spec + schema + constraints) so the paste is consistent every time. Takes ~2 min per task.
+    </div>
+  </div>
+  <div class="friction-card soon">
+    <div class="friction-title" style="color:#fbbf24;">🟡 Soon — Semi-automate</div>
+    <div class="friction-body">
+      Gumloop generates the packaged context file automatically and drops it in a shared Drive folder. You open it, paste into Claude Code, commit. One step instead of three.<br><br>
+      <strong>Requires:</strong> A Gumloop "context packager" automation (buildable now).
+    </div>
+  </div>
+  <div class="friction-card later">
+    <div class="friction-title" style="color:#34d399;">🟢 Later — Full loop</div>
+    <div class="friction-body">
+      When Claude Code exposes an API, Gumloop calls it directly. Spec change → code update → GitHub commit → AWS deploy, zero human steps.<br><br>
+      <strong>Requires:</strong> Anthropic's Claude Code API (not yet public). ETA unknown.
+    </div>
+  </div>
+</div>
+
+<!-- ── RESPONSIBILITY TABLE ─────────────────────────────── -->
+<div class="section-label">Who Owns What</div>
+<div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;overflow:hidden;margin-bottom:48px;">
+  <table class="detail-table">
+    <thead>
+      <tr>
+        <th>Task</th>
+        <th>Gumloop</th>
+        <th>Claude Code</th>
+        <th>AWS</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr><td>Watch ClinicalTrials.gov for new trials</td><td style="color:#60a5fa;">✅ Owns</td><td>—</td><td>—</td></tr>
+      <tr><td>Extract failure reasons from press releases</td><td>Routes text in</td><td>Writes the prompt</td><td style="color:#fbbf24;">✅ Runs (Lambda + Claude API)</td></tr>
+      <tr><td>Build the PTRS logistic model</td><td>—</td><td style="color:#fb923c;">✅ Writes + trains</td><td style="color:#fbbf24;">✅ Hosts (SageMaker)</td></tr>
+      <tr><td>Build the velocity regression model</td><td>—</td><td style="color:#fb923c;">✅ Writes + trains</td><td style="color:#fbbf24;">✅ Hosts (SageMaker)</td></tr>
+      <tr><td>Map asset relationships (Neo4j)</td><td>Sends raw data</td><td style="color:#fb923c;">✅ Writes Cypher schema</td><td style="color:#fbbf24;">✅ Runs (EC2)</td></tr>
+      <tr><td>Serve the API (/predictive_landscape etc.)</td><td>Calls it</td><td style="color:#fb923c;">✅ Writes FastAPI code</td><td style="color:#fbbf24;">✅ Hosts (Lambda/ECS)</td></tr>
+      <tr><td>Render the dashboard UI</td><td style="color:#60a5fa;">✅ Owns</td><td>—</td><td>—</td></tr>
+      <tr><td>Share reports via Drive / email alerts</td><td style="color:#60a5fa;">✅ Owns</td><td>—</td><td>—</td></tr>
+      <tr><td>Daily ETL pipeline (registry → Neo4j)</td><td>Triggers ingest</td><td style="color:#fb923c;">✅ Writes Airflow DAG</td><td style="color:#fbbf24;">✅ Runs (MWAA + Glue)</td></tr>
+      <tr><td>CI/CD pipeline management</td><td>—</td><td style="color:#fb923c;">✅ Writes configs</td><td style="color:#fbbf24;">✅ Runs (CodePipeline)</td></tr>
+      <tr><td>Build new tool from spec</td><td style="color:#60a5fa;">Packages spec</td><td style="color:#fb923c;">✅ Builds it</td><td>Deploys it</td></tr>
+      <tr><td>Test suite validation</td><td>—</td><td style="color:#fb923c;">✅ Writes + runs tests</td><td>Gates deployment</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ── BUILD ORDER ─────────────────────────────── -->
+<div class="section-label">Recommended Build Order</div>
+<div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:24px;margin-bottom:16px;">
+  <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;">
+    <div style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:14px;">
+      <div style="font-size:11px;color:var(--muted);margin-bottom:4px;">SPRINT 1</div>
+      <div style="font-size:12px;font-weight:700;color:#60a5fa;margin-bottom:8px;">Foundation</div>
+      <div style="font-size:11px;color:var(--muted);line-height:1.7;">
+        Claude Code writes FastAPI skeleton + Neo4j schema<br>
+        Deploy to Railway (not AWS yet)<br>
+        Gumloop calls the API<br>
+        Dashboard populates with real data
+      </div>
+    </div>
+    <div style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:14px;">
+      <div style="font-size:11px;color:var(--muted);margin-bottom:4px;">SPRINT 2</div>
+      <div style="font-size:12px;font-weight:700;color:#fb923c;margin-bottom:8px;">Intelligence</div>
+      <div style="font-size:11px;color:var(--muted);line-height:1.7;">
+        Claude Code writes NLP extraction prompts<br>
+        PTRS + velocity models trained<br>
+        Gumloop feeds real CT.gov data<br>
+        Failure engine goes live
+      </div>
+    </div>
+    <div style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:14px;">
+      <div style="font-size:11px;color:var(--muted);margin-bottom:4px;">SPRINT 3</div>
+      <div style="font-size:12px;font-weight:700;color:#fbbf24;margin-bottom:8px;">Scale to AWS</div>
+      <div style="font-size:11px;color:var(--muted);line-height:1.7;">
+        Migrate Railway → AWS Lambda/ECS<br>
+        Neo4j Aura → EC2<br>
+        Add Airflow ETL on MWAA<br>
+        SageMaker endpoints for models
+      </div>
+    </div>
+    <div style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:14px;">
+      <div style="font-size:11px;color:var(--muted);margin-bottom:4px;">SPRINT 4</div>
+      <div style="font-size:12px;font-weight:700;color:#34d399;margin-bottom:8px;">Automate Loop</div>
+      <div style="font-size:11px;color:var(--muted);line-height:1.7;">
+        Gumloop context packager automation<br>
+        GitHub Actions CI/CD live<br>
+        Alerts + scheduled reports running<br>
+        Full pipeline autonomous
+      </div>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>
