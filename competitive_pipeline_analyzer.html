@@ -317,6 +317,29 @@
   }
   body.light .toggle-thumb { transform: translateX(16px); }
 
+
+  /* ASSET MANAGER */
+  .am-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin-bottom: 24px; }
+  .am-card { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; overflow: hidden; }
+  .am-card-header { padding: 14px 18px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
+  .am-card-title { font-size: 13px; font-weight: 700; }
+  .am-body { padding: 16px 18px; }
+  .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 12px; }
+  .form-field { display: flex; flex-direction: column; gap: 5px; }
+  .form-field label { font-size: 10px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; }
+  .form-field input, .form-field select, .form-field textarea { background: var(--surface2); border: 1px solid var(--border); border-radius: 7px; padding: 7px 10px; color: var(--text); font-size: 12px; outline: none; transition: border-color 0.15s; font-family: inherit; }
+  .form-field input:focus, .form-field select:focus, .form-field textarea:focus { border-color: var(--accent); }
+  .form-field textarea { resize: vertical; min-height: 60px; }
+  .form-field.full { grid-column: 1 / -1; }
+  .btn-add { padding: 8px 18px; background: linear-gradient(135deg, var(--accent), var(--accent2)); border: none; border-radius: 8px; color: white; font-size: 12px; font-weight: 700; cursor: pointer; transition: opacity 0.15s; }
+  .btn-add:hover { opacity: 0.85; }
+  .btn-del { padding: 4px 10px; background: rgba(239,68,68,0.12); border: 1px solid rgba(239,68,68,0.2); border-radius: 6px; color: #f87171; font-size: 11px; font-weight: 600; cursor: pointer; transition: background 0.15s; }
+  .btn-del:hover { background: rgba(239,68,68,0.22); }
+  .btn-edit { padding: 4px 10px; background: rgba(59,130,246,0.12); border: 1px solid rgba(59,130,246,0.2); border-radius: 6px; color: #60a5fa; font-size: 11px; font-weight: 600; cursor: pointer; transition: background 0.15s; }
+  .btn-edit:hover { background: rgba(59,130,246,0.22); }
+  .btn-reset { padding: 6px 14px; background: rgba(245,158,11,0.1); border: 1px solid rgba(245,158,11,0.2); border-radius: 7px; color: #fbbf24; font-size: 11px; font-weight: 700; cursor: pointer; }
+  .am-count { background: rgba(59,130,246,0.15); color: #60a5fa; border-radius: 12px; padding: 2px 8px; font-size: 11px; font-weight: 700; }
+
   canvas { max-height: 280px; }
 
   @media (max-width: 900px) {
@@ -365,6 +388,7 @@
       <div class="nav-item" onclick="showPage('safety')"><span class="nav-icon">🛡️</span> Safety Matrix</div>
       <div class="nav-item" onclick="showPage('schema')"><span class="nav-icon">🗄️</span> Graph Schema</div>
       <div class="nav-item" onclick="showPage('api')"><span class="nav-icon">🔌</span> API Payload</div>
+      <div class="nav-item" onclick="showPage('assets')"><span class="nav-icon">⚙️</span> Asset Manager</div>
     </div>
     <div style="height: 1px; background: var(--border); margin: 12px 0;"></div>
     <div class="sidebar-section">
@@ -372,7 +396,7 @@
       <div style="padding: 0 16px;">
         <div class="config-field" style="margin-bottom: 10px;">
           <label>Indication</label>
-          <select id="si-indication" onchange="runAnalysis()">
+          <select id="si-indication" onchange="loadCustomAssets();runAnalysis();renderAssetManagerTables();">
             <option value="NSCLC">NSCLC</option>
             <option value="DLBCL">DLBCL (B-cell Lymphoma)</option>
             <option value="mCRC">mCRC (Colorectal)</option>
@@ -411,6 +435,110 @@
 
   <!-- MAIN -->
   <div class="main">
+
+
+    <!-- ASSET MANAGER PAGE -->
+    <div class="page" id="page-assets">
+      <div class="page-header">
+        <div class="page-title">⚙️ Asset Manager</div>
+        <div class="page-sub">Add, edit, or remove competitor assets and failure records · Changes update the simulation instantly</div>
+      </div>
+
+      <div style="display:flex;gap:10px;margin-bottom:20px;align-items:center;">
+        <button class="btn-reset" onclick="resetToDefaults()">↺ Reset to Defaults</button>
+        <span style="font-size:12px;color:var(--muted);" id="am-saved-label"></span>
+      </div>
+
+      <div class="am-grid">
+
+        <!-- ADD ASSET FORM -->
+        <div class="am-card">
+          <div class="am-card-header">
+            <span class="am-card-title">➕ Add Competitor Asset</span>
+            <span class="am-count" id="asset-count-badge">0 assets</span>
+          </div>
+          <div class="am-body">
+            <div class="form-grid">
+              <div class="form-field"><label>Asset ID</label><input id="f-id" placeholder="e.g. CPT-707"/></div>
+              <div class="form-field"><label>Company</label><input id="f-co" placeholder="e.g. BioTech Corp"/></div>
+              <div class="form-field"><label>MoA</label><input id="f-moa" placeholder="e.g. PD-1 Inhibitor"/></div>
+              <div class="form-field"><label>Target</label><input id="f-target" placeholder="e.g. CD19"/></div>
+              <div class="form-field"><label>Phase</label>
+                <select id="f-phase"><option value="2">Phase 2</option><option value="3" selected>Phase 3</option></select>
+              </div>
+              <div class="form-field"><label>Status</label>
+                <select id="f-status"><option value="Active">Active</option><option value="Failed">Failed</option></select>
+              </div>
+              <div class="form-field"><label>Model Delay (months)</label><input id="f-delay" type="number" step="0.1" value="5.0"/></div>
+              <div class="form-field"><label>Regulatory Type</label>
+                <select id="f-reg"><option value="Standard">Standard (+10 mo)</option><option value="Priority">Priority (+6 mo)</option></select>
+              </div>
+              <div class="form-field"><label>PTRS (0–1)</label><input id="f-ptrs" type="number" step="0.01" min="0" max="1" value="0.55"/></div>
+              <div class="form-field"><label>NCT ID</label><input id="f-nct" placeholder="e.g. NCT04112381"/></div>
+              <div class="form-field"><label>Projected Readout</label><input id="f-projected" placeholder="e.g. 2026-Q3"/></div>
+              <div class="form-field"><label>Market Entry</label><input id="f-market" placeholder="e.g. 2027-Q1"/></div>
+            </div>
+            <button class="btn-add" onclick="addAsset()">➕ Add to Simulation</button>
+          </div>
+        </div>
+
+        <!-- ADD FAILURE FORM -->
+        <div class="am-card">
+          <div class="am-card-header">
+            <span class="am-card-title">🧬 Add Failure Record</span>
+            <span class="am-count" id="failure-count-badge">0 failures</span>
+          </div>
+          <div class="am-body">
+            <div class="form-grid">
+              <div class="form-field"><label>Asset Name</label><input id="ff-asset" placeholder="e.g. CPT-606 (Skivobinib)"/></div>
+              <div class="form-field"><label>Phase</label><input id="ff-phase" placeholder="e.g. Phase 3"/></div>
+              <div class="form-field"><label>Failure Vector</label>
+                <select id="ff-vector">
+                  <option value="Safety">Safety</option>
+                  <option value="Efficacy">Efficacy</option>
+                  <option value="Operational">Operational</option>
+                  <option value="Commercial">Commercial</option>
+                </select>
+              </div>
+              <div class="form-field"><label>Sponsor Spin?</label>
+                <select id="ff-spin"><option value="false">No</option><option value="true">Yes — spin detected</option></select>
+              </div>
+              <div class="form-field"><label>Target Metric</label><input id="ff-target-m" placeholder="e.g. OS ≥ 18 mo"/></div>
+              <div class="form-field"><label>Actual Result</label><input id="ff-actual-m" placeholder="e.g. 12.3 mo"/></div>
+              <div class="form-field full"><label>Root Cause</label><textarea id="ff-root" placeholder="e.g. Grade 4 Neutropenia in 34% of patients at therapeutic dose"></textarea></div>
+              <div class="form-field full"><label>Strategic Implication</label><textarea id="ff-impl" placeholder="e.g. Raises class-wide neutropenia concern for ALK inhibitors."></textarea></div>
+            </div>
+            <button class="btn-add" onclick="addFailure()">➕ Add Failure Record</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ASSET TABLE -->
+      <div class="section-title">Current Assets <span id="am-indication-label"></span></div>
+      <div class="card" style="margin-bottom:24px;">
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>ID</th><th>Company</th><th>Phase</th><th>MoA</th><th>Status</th><th>Delay</th><th>PTRS</th><th>Market Entry</th><th>Actions</th></tr>
+            </thead>
+            <tbody id="am-asset-table"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- FAILURE TABLE -->
+      <div class="section-title">Failure Records</div>
+      <div class="card">
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>Asset</th><th>Phase</th><th>Vector</th><th>Root Cause</th><th>Spin</th><th>Actions</th></tr>
+            </thead>
+            <tbody id="am-failure-table"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
 
     <!-- DASHBOARD PAGE -->
     <div class="page active" id="page-dashboard">
@@ -1427,10 +1555,206 @@ function toggleTheme() {
   }
 })();
 
+
+// ============================================================
+// ASSET MANAGER — CRUD + localStorage
+// ============================================================
+
+function getStorageKey() {
+  const ind = document.getElementById('si-indication').value;
+  return 'cpa-assets-' + ind;
+}
+function getFailureKey() {
+  const ind = document.getElementById('si-indication').value;
+  return 'cpa-failures-' + ind;
+}
+
+function loadCustomAssets() {
+  const ind = document.getElementById('si-indication').value;
+  const stored = localStorage.getItem(getStorageKey());
+  if (stored) {
+    INDICATION_DATA[ind].assets = JSON.parse(stored);
+  }
+  const storedF = localStorage.getItem(getFailureKey());
+  if (storedF) {
+    INDICATION_DATA[ind].failures = JSON.parse(storedF);
+  }
+}
+
+function saveAssets() {
+  const ind = document.getElementById('si-indication').value;
+  localStorage.setItem(getStorageKey(), JSON.stringify(INDICATION_DATA[ind].assets));
+  localStorage.setItem(getFailureKey(), JSON.stringify(INDICATION_DATA[ind].failures));
+  showSavedLabel();
+}
+
+function showSavedLabel() {
+  const el = document.getElementById('am-saved-label');
+  if (el) { el.textContent = '✅ Saved · simulation updated'; setTimeout(() => { el.textContent = ''; }, 3000); }
+}
+
+function addAsset() {
+  const ind = document.getElementById('si-indication').value;
+  const id      = document.getElementById('f-id').value.trim();
+  const co      = document.getElementById('f-co').value.trim();
+  const moa     = document.getElementById('f-moa').value.trim();
+  const target  = document.getElementById('f-target').value.trim();
+  const phase   = parseInt(document.getElementById('f-phase').value);
+  const status  = document.getElementById('f-status').value;
+  const delay   = parseFloat(document.getElementById('f-delay').value) || 0;
+  const reg     = document.getElementById('f-reg').value;
+  const ptrs    = parseFloat(document.getElementById('f-ptrs').value) || 0.5;
+  const nct     = document.getElementById('f-nct').value.trim() || '—';
+  const proj    = document.getElementById('f-projected').value.trim() || '2027-Q1';
+  const market  = document.getElementById('f-market').value.trim() || '2027-Q3';
+
+  if (!id || !co || !moa) { alert('Please fill in Asset ID, Company, and MoA at minimum.'); return; }
+
+  const existing = INDICATION_DATA[ind].assets.findIndex(a => a.id === id);
+  const asset = { id, co, phase, moa, target, status, nct, delay, reg, ptrs, sponsored: '2024-Q1', projected: proj, market };
+
+  if (existing >= 0) {
+    INDICATION_DATA[ind].assets[existing] = asset;
+  } else {
+    INDICATION_DATA[ind].assets.push(asset);
+  }
+
+  saveAssets();
+  renderAssetManagerTables();
+  runAnalysis();
+
+  // Clear form
+  ['f-id','f-co','f-moa','f-target','f-nct','f-projected','f-market'].forEach(id => { const el = document.getElementById(id); if(el) el.value = ''; });
+  document.getElementById('f-ptrs').value = '0.55';
+  document.getElementById('f-delay').value = '5.0';
+}
+
+function addFailure() {
+  const ind     = document.getElementById('si-indication').value;
+  const asset   = document.getElementById('ff-asset').value.trim();
+  const phase   = document.getElementById('ff-phase').value.trim();
+  const vector  = document.getElementById('ff-vector').value;
+  const spin    = document.getElementById('ff-spin').value === 'true';
+  const targetM = document.getElementById('ff-target-m').value.trim();
+  const actualM = document.getElementById('ff-actual-m').value.trim();
+  const root    = document.getElementById('ff-root').value.trim();
+  const impl    = document.getElementById('ff-impl').value.trim();
+
+  if (!asset || !root) { alert('Please fill in Asset Name and Root Cause.'); return; }
+
+  INDICATION_DATA[ind].failures.push({
+    asset, phase, vector, root, spin, implication: impl,
+    metrics: { target_m: targetM, actual_m: actualM }
+  });
+
+  saveAssets();
+  renderAssetManagerTables();
+  runAnalysis();
+
+  ['ff-asset','ff-phase','ff-target-m','ff-actual-m','ff-root','ff-impl'].forEach(id => { const el = document.getElementById(id); if(el) el.value = ''; });
+}
+
+function deleteAsset(id) {
+  const ind = document.getElementById('si-indication').value;
+  INDICATION_DATA[ind].assets = INDICATION_DATA[ind].assets.filter(a => a.id !== id);
+  saveAssets(); renderAssetManagerTables(); runAnalysis();
+}
+
+function deleteFailure(idx) {
+  const ind = document.getElementById('si-indication').value;
+  INDICATION_DATA[ind].failures.splice(idx, 1);
+  saveAssets(); renderAssetManagerTables(); runAnalysis();
+}
+
+function editAsset(id) {
+  const ind = document.getElementById('si-indication').value;
+  const a = INDICATION_DATA[ind].assets.find(x => x.id === id);
+  if (!a) return;
+  document.getElementById('f-id').value        = a.id;
+  document.getElementById('f-co').value        = a.co;
+  document.getElementById('f-moa').value       = a.moa;
+  document.getElementById('f-target').value    = a.target || '';
+  document.getElementById('f-phase').value     = a.phase;
+  document.getElementById('f-status').value    = a.status;
+  document.getElementById('f-delay').value     = a.delay;
+  document.getElementById('f-reg').value       = a.reg;
+  document.getElementById('f-ptrs').value      = a.ptrs;
+  document.getElementById('f-nct').value       = a.nct || '';
+  document.getElementById('f-projected').value = a.projected || '';
+  document.getElementById('f-market').value    = a.market || '';
+  document.getElementById('f-id').focus();
+  document.querySelector('#page-assets').scrollTop = 0;
+}
+
+function resetToDefaults() {
+  const ind = document.getElementById('si-indication').value;
+  if (!confirm('Reset all assets and failures for ' + ind + ' to defaults? This cannot be undone.')) return;
+  localStorage.removeItem(getStorageKey());
+  localStorage.removeItem(getFailureKey());
+  location.reload();
+}
+
+function renderAssetManagerTables() {
+  const ind = document.getElementById('si-indication').value;
+  const assets   = INDICATION_DATA[ind].assets;
+  const failures = INDICATION_DATA[ind].failures;
+
+  // Update badges
+  const ab = document.getElementById('asset-count-badge');
+  if (ab) ab.textContent = assets.length + ' assets';
+  const fb = document.getElementById('failure-count-badge');
+  if (fb) fb.textContent = failures.length + ' failures';
+  const il = document.getElementById('am-indication-label');
+  if (il) il.textContent = '— ' + ind;
+
+  // Asset table
+  const atb = document.getElementById('am-asset-table');
+  if (atb) {
+    atb.innerHTML = assets.map(a => {
+      const ptrsColor = a.ptrs >= 0.7 ? '#10b981' : a.ptrs >= 0.5 ? '#f59e0b' : '#ef4444';
+      const statusBadge = a.status === 'Failed'
+        ? '<span class="badge" style="background:rgba(239,68,68,0.15);color:#f87171;">Failed</span>'
+        : '<span class="badge badge-green">Active</span>';
+      return '<tr>' +
+        '<td><strong>' + a.id + '</strong></td>' +
+        '<td>' + a.co + '</td>' +
+        '<td><span class="badge badge-blue">Ph.' + a.phase + '</span></td>' +
+        '<td>' + a.moa + '</td>' +
+        '<td>' + statusBadge + '</td>' +
+        '<td>' + (a.delay > 0 ? '+' + a.delay.toFixed(1) + ' mo' : '—') + '</td>' +
+        '<td style="color:' + ptrsColor + ';font-weight:700;">' + (a.status === 'Failed' ? '—' : (a.ptrs * 100).toFixed(0) + '%') + '</td>' +
+        '<td>' + (a.market || '—') + '</td>' +
+        '<td style="display:flex;gap:6px;">' +
+          '<button class="btn-edit" data-id="' + a.id + '" onclick="editAsset(this.dataset.id)">Edit</button>' +
+          '<button class="btn-del" data-id="' + a.id + '" onclick="deleteAsset(this.dataset.id)">Delete</button>' +
+        '</td>' +
+      '</tr>';
+    }).join('');
+  }
+
+  // Failure table
+  const ftb = document.getElementById('am-failure-table');
+  if (ftb) {
+    const vColors = { Safety:'#f87171', Efficacy:'#fbbf24', Operational:'#60a5fa', Commercial:'#a78bfa' };
+    ftb.innerHTML = failures.map((f, i) => {
+      return '<tr>' +
+        '<td><strong>' + f.asset + '</strong></td>' +
+        '<td>' + f.phase + '</td>' +
+        '<td style="color:' + (vColors[f.vector]||'#94a3b8') + ';font-weight:700;">' + f.vector + '</td>' +
+        '<td style="max-width:260px;white-space:normal;font-size:11px;">' + (f.root||f.rootCause||'').substring(0,90) + '…</td>' +
+        '<td>' + (f.spin ? '⚠️ Yes' : '✅ No') + '</td>' +
+        '<td><button class="btn-del" onclick="deleteFailure(' + i + ')">Delete</button></td>' +
+      '</tr>';
+    }).join('');
+  }
+}
+
 // ============================================================
 // INIT
 // ============================================================
+loadCustomAssets();
 runAnalysis();
+renderAssetManagerTables();
 </script>
 </body>
 </html>
